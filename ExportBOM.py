@@ -135,11 +135,101 @@ def buildHTMLWithImagesEditable0(app, bom, imageDirectory, fileName):
         
         html_file.write('</table>\n')
         html_file.write('</body></html>\n')
-def buildHTMLWithImagesEditable(app, bom, imageDirectory, fileName):
-    with open(fileName + '.html', 'w', encoding='utf-8') as html_file:
+
+def buildHTMLWithImagesEditableCSV(app, bom, imageDirectory, fileName):
+    with open(fileName + '_editable' + '.html', 'w', encoding='utf-8') as html_file:
         html_file.write('<html><body>\n')
         
         # Include a script for handling selection and exporting
+        html_file.write('''
+        <script>
+        function exportSelected() {
+            var table = document.getElementById("bomTable");
+            var selectedRows = [];
+            var checkboxes = table.getElementsByClassName("rowCheckbox");
+            for (var i = 0; i < checkboxes.length; i++) {
+                if (checkboxes[i].checked) {
+                    var row = checkboxes[i].closest("tr");
+                    var rowData = [];
+                    var cells = row.getElementsByTagName("td");
+                    for (var j = 1; j < cells.length - 1; j++) { // Skip the image cell
+                        rowData.push(cells[j].innerText);
+                    }
+                    selectedRows.push(rowData);
+                }
+            }
+
+            if (selectedRows.length > 0) {
+                var csvContent = "Name,Instances,Material";
+                if (''' + ('true' if includeVolume else 'false') + ''') {
+                    csvContent += ",Volume";  // Include Volume if enabled
+                }
+                csvContent += ",Image\\n";  // Include Image column for the export
+                
+                selectedRows.forEach(function(row) {
+                    csvContent += row.join(",") + "\\n";  // Combine the row data
+                });
+                
+                var blob = new Blob([csvContent], { type: "text/csv" });
+                var link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "selected_bom.csv";  // Default export file name
+                link.click();
+            } else {
+                alert("No rows selected for export.");
+            }
+        }
+        </script>
+        ''')
+
+        html_file.write('<table id="bomTable" border="1">\n')
+        
+        # Conditionally write the header with or without the volume column
+        html_file.write('<tr><th>Select</th><th>Name</th><th>Instances</th><th>Material</th>')
+        if includeVolume:
+            html_file.write('<th>Volume</th>')  # Only include this if includeVolume is True
+        html_file.write('<th>Image</th></tr>\n')
+        
+        # Write the rows with editable cells and selection checkboxes
+        for item in bom:
+            image_path = f"{imageDirectory}/{item['component'].id}.png"
+            image_base64 = encode_image_to_base64(image_path) if os.path.exists(image_path) else ''
+
+            html_file.write('<tr>')
+            
+            # Selection checkbox
+            html_file.write(f'<td><input type="checkbox" class="rowCheckbox"></td>')
+            
+            # Editable fields (contenteditable="true")
+            html_file.write(f'<td contenteditable="true">{item["name"]}</td>')
+            html_file.write(f'<td contenteditable="true">{item["instances"]}</td>')
+            html_file.write(f'<td contenteditable="true">{item["mat"]}</td>')
+            
+            # Include volume data only if includeVolume is True
+            if includeVolume:
+                html_file.write(f'<td contenteditable="true">{item["volume"]}</td>')
+            
+            # Handling the image column - export either base64 or image URL
+            if image_base64:
+                html_file.write(f'<td><img src="data:image/png;base64,{image_base64}" alt="Image" width="50" height="50"></td>')
+            else:
+                html_file.write('<td>Image not found</td>')
+            
+            html_file.write('</tr>\n')
+        
+        html_file.write('</table>\n')
+        
+        # Export button to trigger CSV export
+        html_file.write('<button onclick="exportSelected()">Export Selected Rows</button>\n')
+        
+        html_file.write('</body></html>\n')
+
+
+def buildHTMLWithImagesEditableXlsx(app, bom, imageDirectory, fileName):
+    with open(fileName+'_editable' + '.html', 'w', encoding='utf-8') as html_file:
+        html_file.write('<html><body>\n')
+        
+        # Include a script for handling selection and exporting to XLSX
         html_file.write('''
         <script>
         function exportSelected() {
@@ -159,21 +249,26 @@ def buildHTMLWithImagesEditable(app, bom, imageDirectory, fileName):
             }
 
             if (selectedRows.length > 0) {
-                var csvContent = "Name,Instances,Material";
-                if (''' + ('true' if includeVolume else 'false') + ''') {
-                    csvContent += ",Volume";
-                }
-                csvContent += ",Image\\n";
-                
-                selectedRows.forEach(function(row) {
-                    csvContent += row.join(",") + "\\n";
-                });
-                
-                var blob = new Blob([csvContent], { type: "text/csv" });
-                var link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = "selected_bom.csv";
-                link.click();
+                var data = {
+                    rows: selectedRows,
+                    includeVolume: ''' + ('true' if includeVolume else 'false') + '''
+                };
+
+                fetch('/export_xlsx', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.blob())
+                .then(blob => {
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'selected_bom.xlsx';
+                    link.click();
+                })
+                .catch(error => alert('Error exporting data: ' + error));
             } else {
                 alert("No rows selected for export.");
             }
@@ -355,7 +450,7 @@ def run(context):
         msg = spacePadRight('Name', 25) + spacePadRight('Instances', 15) + spacePadRight('Material', 15) + 'Volume\n' + walkThrough(bom)
         buildCSV(bom, dst_directory, os.path.splitext(filename)[0] + '_bom')
         buildHTMLWithImages(app, bom, dst_directory, os.path.splitext(filename)[0] + '_html')
-        buildHTMLWithImagesEditable(app, bom, dst_directory, os.path.splitext(filename)[0] + '_html')
+        buildHTMLWithImagesEditableCSV(app, bom, dst_directory, os.path.splitext(filename)[0] + '_html')
         ui.messageBox(msg, 'Bill Of Materials')
 
     except Exception as e:
