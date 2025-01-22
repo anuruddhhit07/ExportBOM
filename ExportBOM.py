@@ -70,8 +70,14 @@ def buildHTMLWithImages(app, bom, imageDirectory, fileName):
     with open(fileName + '.html', 'w', encoding='utf-8') as html_file:
         html_file.write('<html><body>\n')
         html_file.write('<table border="1">\n')
-        html_file.write('<tr><th>Name</th><th>Instances</th><th>Material</th><th>Volume</th><th>Image</th></tr>\n')
         
+        # Conditionally write the header with or without the volume column
+        html_file.write('<tr><th>Name</th><th>Instances</th><th>Material</th>')
+        if includeVolume:
+            html_file.write('<th>Volume</th>')  # Only include this if includeVolume is True
+        html_file.write('<th>Image</th></tr>\n')
+        
+        # Write the rows
         for item in bom:
             image_path = f"{imageDirectory}/{item['component'].id}.png"
             image_base64 = encode_image_to_base64(image_path) if os.path.exists(image_path) else ''
@@ -79,11 +85,10 @@ def buildHTMLWithImages(app, bom, imageDirectory, fileName):
             html_file.write(f'<td>{item["name"]}</td>')
             html_file.write(f'<td>{item["instances"]}</td>')
             html_file.write(f'<td>{item["mat"]}</td>')
-            # Include volume only if it's enabled
+            
+            # Include volume data only if includeVolume is True
             if includeVolume:
                 html_file.write(f'<td>{item["volume"]}</td>')
-            else:
-                html_file.write('<td>N/A</td>')
             
             if image_base64:
                 html_file.write(f'<td><img src="data:image/png;base64,{image_base64}" alt="Image" width="50" height="50"></td>')
@@ -94,6 +99,7 @@ def buildHTMLWithImages(app, bom, imageDirectory, fileName):
         
         html_file.write('</table>\n')
         html_file.write('</body></html>\n')
+
 
 def setGridDisplay(turnOn):
     app = adsk.core.Application.get()
