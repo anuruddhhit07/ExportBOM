@@ -44,6 +44,21 @@ def run(context):
         bom = []
         for occ in occs:
             comp = occ.component
+
+            if comp is None:
+                app.log("Skipping occurrence with no component")
+                continue  # Skip this occurrence
+
+            app.log("Component: " + str(comp.name))
+
+            # Check if the component name is defined
+            if not comp.name:
+                app.log("Skipping component with undefined name")
+                continue  # Skip this component and move to the next occurrence
+
+
+            app.log("SubComponent: " + str(comp.occurrences.count))
+            
             jj = 0
             for bomI in bom:
                 if bomI['component'] == comp:
@@ -57,32 +72,55 @@ def run(context):
                 for bodyK in bodies:
                     if bodyK.isSolid:
                         volume += bodyK.volume
-                
-                bom.append({
-                    'component': comp,
-                    'name': comp.name,
-                    'instances': 1,
-                    'mat': comp.material.name,
-                    'volume': volume if includeVolume else None
-                })
+
+                app.log("Component_loop1: " + str(comp.name))
+                app.log("SubComponent_mat: " + str(comp.material))
+                # app.log("SubComponent_mat: " + str(comp.material.name))
+
+                if comp.material:
+                    if comp.material.name:
+                        bom.append({
+                            'component': comp,
+                            'name': comp.name,
+                            'instances': 1,
+                            'mat':  comp.material.name ,
+                            'volume': volume if includeVolume else None
+                        })
+                    else:
+                        bom.append({
+                            'component': comp,
+                            'name': comp.name,
+                            'instances': 1,
+                            'mat':  "Not Assigned" ,
+                            'volume': volume if includeVolume else None
+                        })
+                else:
+                    bom.append({
+                        'component': comp,
+                        'name': comp.name,
+                        'instances': 1,
+                        'mat':  "Not Assigned" ,
+                        'volume': volume if includeVolume else None
+                    })
+
+
 
         for bomItem in bom:
             exporter.take_image(app, ui, bomItem['component'], occs, dst_directory)
             exporter.Unisolate(visibleTopLevelComp)
 
-        # Display BOM data and save
-        # msg = spacePadRight('Name', 25) + spacePadRight('Instances', 15) + spacePadRight('Material', 15) + 'Volume\n' + walkThrough(bom)
-        # Display BOM data and save files
-        msg = exporter.space_pad_right('Name', 25) + \
-                  exporter.space_pad_right('Instances', 15) + \
-                  exporter.space_pad_right('Material', 15) + \
-                  ('Volume\n' if includeVolume else '\n') + \
-                  exporter.walk_through(bom)
+       
+
+        # msg = exporter.space_pad_right('Name', 25) + \
+        #           exporter.space_pad_right('Instances', 15) + \
+        #           exporter.space_pad_right('Material', 15) + \
+        #           ('Volume\n' if includeVolume else '\n') + \
+        #           exporter.walk_through(bom)
         
         exporter.build_csv(bom, dst_directory, os.path.splitext(filename)[0] + '_bom')
         exporter.build_html_with_images(app, bom, dst_directory, os.path.splitext(filename)[0] + '_html', editable=False)
         exporter.buildHTMLWithImagesEditableCSV(app, bom, dst_directory, os.path.splitext(filename)[0] + '_html', editable=True)
-        ui.messageBox(msg, 'Bill Of Materials')
+        # ui.messageBox(msg, 'Bill Of Materials')
 
     except Exception as e:
         if ui:
